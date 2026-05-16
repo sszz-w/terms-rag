@@ -98,6 +98,25 @@ python query.py
 python query.py "投标方需要具备ISO9001认证"
 ```
 
+### Web API 服务
+
+启动 HTTP 服务：
+
+```bash
+source .venv/bin/activate
+uvicorn server:app --host 0.0.0.0 --port 8000
+```
+
+查询接口：
+
+```bash
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"text": "投标方需要ISO9001认证", "top_k": 3}'
+```
+
+API 文档（自动生成）：浏览器访问 http://localhost:8000/docs
+
 ### 输出示例
 
 ```
@@ -149,7 +168,8 @@ rag/
 ├── config.py          # 配置参数
 ├── embedding.py       # Embedding 模块
 ├── ingest.py          # 数据导入
-├── query.py           # 查询接口
+├── query.py           # 命令行查询接口
+├── server.py          # Web API 服务 (FastAPI)
 ├── requirements.txt   # Python 依赖
 ├── chroma_db/         # 向量数据库（自动生成）
 ├── model_cache/       # 模型缓存（自动生成）
@@ -160,7 +180,7 @@ rag/
 
 ## 扩展方向
 
-- **Web 接口**：加 FastAPI/Gradio 提供 HTTP 查询服务
 - **Reranker**：引入交叉编码器对 Top-K 结果二次排序，提升精度
 - **LLM 生成**：接入大模型对检索结果做自然语言总结
 - **批量查询**：支持从文件批量读取条款并输出匹配结果
+
