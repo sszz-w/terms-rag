@@ -2,8 +2,9 @@
 import sys
 import chromadb
 
-from config import CHROMA_DIR, COLLECTION_NAME, TOP_K
+from config import CHROMA_DIR, COLLECTION_NAME, TOP_K, RERANK_TOP_N, RERANK_ENABLED
 from embedding import embed_texts
+from reranker import rerank
 
 
 def get_collection():
@@ -11,22 +12,40 @@ def get_collection():
     return client.get_collection(name=COLLECTION_NAME)
 
 
-def query(text: str, top_k: int = TOP_K):
+def query(text: str, top_k: int = TOP_K, use_rerank: bool = RERANK_ENABLED):
     collection = get_collection()
-    query_embedding = embed_texts([text])
-    results = collection.query(query_embeddings=query_embedding, n_results=top_k)
 
-    matches = []
-    for i in range(len(results["ids"][0])):
-        distance = results["distances"][0][i]
-        similarity = 1 - distance
-        matches.append({
-            "相似度": round(similarity, 4),
-            "原始条款": results["documents"][0][i],
-            "证书/报告名称": results["metadatas"][0][i]["证书报告名称"],
-            "内容要素字段": results["metadatas"][0][i]["内容要素字段"],
-            "有效性判定": results["metadatas"][0][i]["有效性判定"],
-        })
+    recall_n = RERANK_TOP_N if use_rerank else top_k
+    query_embedding = embed_texts([text])
+    results = collection.query(query_embeddings=query_embedding, n_results=recall_n)
+
+    documents = results["documents"][0]
+    metadatas = results["metadatas"][0]
+    distances = results["distances"][0]
+
+    if use_rerank and len(documents) > 0:
+        ranked = rerank(text, documents, top_k)
+        matches = []
+        for item in ranked:
+            idx = item["index"]
+            matches.append({
+                "相似度": round(item["score"], 4),
+                "原始条款": documents[idx],
+                "证书/报告名称": metadatas[idx]["证书报告名称"],
+                "内容要素字段": metadatas[idx]["内容要素字段"],
+                "有效性判定": metadatas[idx]["有效性判定"],
+            })
+    else:
+        matches = []
+        for i in range(min(top_k, len(documents))):
+            similarity = 1 - distances[i]
+            matches.append({
+                "相似度": round(similarity, 4),
+                "原始条款": documents[i],
+                "证书/报告名称": metadatas[i]["证书报告名称"],
+                "内容要素字段": metadatas[i]["内容要素字段"],
+                "有效性判定": metadatas[i]["有效性判定"],
+            })
     return matches
 
 
