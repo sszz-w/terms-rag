@@ -15,6 +15,7 @@
 | 组件 | 选择 | 理由 |
 |------|------|------|
 | Embedding 模型 | BAAI/bge-small-zh-v1.5 | 中文语义理解能力强，模型体积小（~100MB） |
+| Reranker 模型 | BAAI/bge-reranker-base | 交叉编码器，对 query-document 对精细打分，提升精度 |
 | 推理引擎 | ONNX Runtime (via fastembed) | 无需 GPU，CPU 即可高效运行 |
 | 向量数据库 | ChromaDB | 纯 Python，持久化存储，支持百万级文档扩展 |
 | 相似度度量 | 余弦相似度 | 适合文本语义匹配场景 |
@@ -22,10 +23,10 @@
 ### 工作流程
 
 ```
-用户输入条款 → Embedding 模型编码 → 向量相似度检索 → 返回 Top-K 匹配结果
-                                                         ├── 证书/报告名称
-                                                         ├── 内容要素字段
-                                                         └── 有效性判定
+用户输入条款 → Embedding 模型编码 → 向量相似度召回 Top-N → Cross-Encoder 精排 → 返回 Top-K 匹配结果
+                                                                                   ├── 证书/报告名称
+                                                                                   ├── 内容要素字段
+                                                                                   └── 有效性判定
 ```
 
 ### 特点
@@ -112,8 +113,13 @@ uvicorn server:app --host 0.0.0.0 --port 8000
 ```bash
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
-  -d '{"text": "投标方需要ISO9001认证", "top_k": 3}'
+  -d '{"text": "投标方需要ISO9001认证", "top_k": 3, "rerank": true}'
 ```
+
+参数说明：
+- `text`：查询文本
+- `top_k`：返回结果数量（默认 3）
+- `rerank`：是否启用 Reranker 精排（默认 true）
 
 API 文档（自动生成）：浏览器访问 http://localhost:8000/docs
 
@@ -157,6 +163,10 @@ python ingest.py
 EMBEDDING_MODEL = "BAAI/bge-small-zh-v1.5"  # Embedding 模型
 COLLECTION_NAME = "clauses"                   # 向量库集合名
 TOP_K = 3                                     # 返回匹配数量
+
+RERANKER_MODEL = "BAAI/bge-reranker-base"     # Reranker 模型
+RERANK_TOP_N = 10                             # 召回数量（Reranker 输入）
+RERANK_ENABLED = True                         # 是否默认启用 Reranker
 ```
 
 ---
@@ -167,6 +177,7 @@ TOP_K = 3                                     # 返回匹配数量
 rag/
 ├── config.py          # 配置参数
 ├── embedding.py       # Embedding 模块
+├── reranker.py        # Reranker 精排模块（Cross-Encoder）
 ├── ingest.py          # 数据导入
 ├── query.py           # 命令行查询接口
 ├── server.py          # Web API 服务 (FastAPI)
@@ -180,7 +191,7 @@ rag/
 
 ## 扩展方向
 
-- **Reranker**：引入交叉编码器对 Top-K 结果二次排序，提升精度
+- ~~**Reranker**：引入交叉编码器对 Top-K 结果二次排序，提升精度~~ ✅ 已完成
 - **LLM 生成**：接入大模型对检索结果做自然语言总结
 - **批量查询**：支持从文件批量读取条款并输出匹配结果
 
